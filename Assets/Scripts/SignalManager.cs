@@ -80,9 +80,21 @@ public class MoveButtonReleasedSignal : Signal
 public class PlayerHitJelloporterSignal : Signal
 {
     public Jelloporter jelloporter { get; private set; }
-    public PlayerHitJelloporterSignal(Jelloporter jelloporter)
+    public MainCharacter player { get; private set; }
+    public PlayerHitJelloporterSignal(Jelloporter jelloporter, MainCharacter player)
     {
         this.jelloporter = jelloporter;
+    }
+}
+public class JelloportationStartedSignal : Signal
+{
+    public Jelloporter destinationJelloporter { get; private set; }
+    public MainCharacter character { get; private set; }
+
+    public JelloportationStartedSignal(Jelloporter jelloporter, MainCharacter character)
+    {
+        this.destinationJelloporter = jelloporter;
+        this.character = character;
     }
 }
 public class PlayerExitingJelloporterSignal : Signal

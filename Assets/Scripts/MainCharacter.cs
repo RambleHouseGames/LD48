@@ -19,6 +19,10 @@ public class MainCharacter : MonoBehaviour
     [SerializeField]
     private Collider2D groundCollider;
 
+    [SerializeField]
+    private Character character;
+    public Character Character { get { return character; } }
+
     private CharacterState currentState =  null;
     private Animator myAnimator = null;
     private SpriteRenderer myRenderer = null;
@@ -30,18 +34,18 @@ public class MainCharacter : MonoBehaviour
     {
         if (currentState == null)
         {
-            currentState = new IdleState(this);
+            currentState = new WaitToStart(this);
             currentState.Start();
-            SignalManager.Inst.FireSignal(new StateStartedSignal(currentState));
+            //SignalManager.Inst.FireSignal(new StateStartedSignal(currentState));
         }
         CharacterState nextState = currentState.Update();
         if (nextState != currentState)
         {
             currentState.End();
-            SignalManager.Inst.FireSignal(new StateEndingSignal(currentState));
+            //SignalManager.Inst.FireSignal(new StateEndingSignal(currentState));
             currentState = nextState;
             nextState.Start();
-            SignalManager.Inst.FireSignal(new StateStartedSignal(currentState));
+            //SignalManager.Inst.FireSignal(new StateStartedSignal(currentState));
         }
     }
 
@@ -150,6 +154,20 @@ public class MainCharacter : MonoBehaviour
             myRigidbody = GetComponent<Rigidbody2D>();
         myRigidbody.velocity = exitVelocity;
     }
+
+    public void MoveTowardJelloporter(Jelloporter destination, float perportion)
+    {
+        float distance = Vector2.Distance(transform.position, destination.transform.position);
+        transform.position = Vector2.MoveTowards(transform.position, destination.transform.position, distance * perportion);
+    }
+
+    public void SetKinematic(bool shouldBeKinematic)
+    {
+        if (myRigidbody == null)
+            myRigidbody = GetComponent<Rigidbody2D>();
+        myRigidbody.isKinematic = shouldBeKinematic;
+    }
+
 }
 
 public abstract class CharacterState : State
@@ -165,6 +183,45 @@ public abstract class CharacterState : State
         return (CharacterState)base.Update();
     }
 }
+
+public class WaitToStart : CharacterState
+{
+    private CharacterState nextState;
+
+    public WaitToStart(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        thisCharacter.StopMove();
+        thisCharacter.FireAnimationTrigger("Idle");
+        SignalManager.Inst.AddListener<StateStartedSignal>(onStateStarted);
+    }
+
+    public override CharacterState Update()
+    {
+        return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<StateStartedSignal>(onStateStarted);
+    }
+
+    private void onStateStarted(Signal signal)
+    {
+        StateStartedSignal stateStartedSignal = (StateStartedSignal)signal;
+        if (stateStartedSignal.startedState.GetType() == typeof(PlayState))
+        {
+            PlayState playState = (PlayState)stateStartedSignal.startedState;
+            if(playState.character == thisCharacter.Character)
+                nextState = new IdleState(thisCharacter);
+        }
+    }
+}
+
 
 public class IdleState : CharacterState
 {
@@ -903,9 +960,49 @@ public class EnterJelloporterState : CharacterState {
     public override CharacterState Update()
     {
         if (thisCharacter.EnterJelloporter(jelloporter))
-            return new ExitJelloporterState(thisCharacter, jelloporter.ConnectedJelloporter);
+            return new JelloportationState(thisCharacter, jelloporter.ConnectedJelloporter);
         else
             return this;
+    }
+}
+
+public class JelloportationState : CharacterState
+{
+    private CharacterState nextState;
+
+    private Jelloporter destinationJelloporter;
+    public JelloportationState(MainCharacter thisCharacter, Jelloporter destinationJelloporter) : base(thisCharacter)
+    {
+        nextState = this;
+        this.destinationJelloporter = destinationJelloporter;
+    }
+
+    public override void Start()
+    {
+        thisCharacter.FireAnimationTrigger("Jello");
+        thisCharacter.SetKinematic(true);
+        SignalManager.Inst.AddListener<StateStartedSignal>(onStateStarted);
+        SignalManager.Inst.FireSignal(new JelloportationStartedSignal(destinationJelloporter, thisCharacter));
+    }
+
+    public override CharacterState Update()
+    {
+        return nextState;
+    }
+
+    public override void End()
+    {
+        thisCharacter.SetKinematic(false);
+        SignalManager.Inst.RemoveListener<StateStartedSignal>(onStateStarted);
+    }
+
+    private void onStateStarted(Signal signal)
+    {
+        StateStartedSignal stateStartedSignal = (StateStartedSignal)signal;
+        if(stateStartedSignal.startedState.GetType() == typeof(PlayState))
+        {
+            nextState = new ExitJelloporterState(thisCharacter, destinationJelloporter);
+        }
     }
 }
 
@@ -935,12 +1032,11 @@ public class ExitJelloporterState : CharacterState
     {
         if (thisCharacter.IsGrounded)
         {
-            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
-                return new RunLeftState(thisCharacter);
-            else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
-                return new RunRightState(thisCharacter);
-            else
-                return new IdleState(thisCharacter);
+            //if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            //    return new RunLeftState(thisCharacter);
+            //else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            //    return new RunRightState(thisCharacter);
+            return new WaitToStart(thisCharacter);
         }
         else
         {

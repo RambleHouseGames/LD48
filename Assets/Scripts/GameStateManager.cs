@@ -61,7 +61,7 @@ public class StartMenuState : State
     {
         ButtonPressedSignal buttonPressedSignal = (ButtonPressedSignal)signal;
         if (buttonPressedSignal.buttonType == ButtonType.START)
-            nextState = new IntroState();
+            nextState = new PlayState(Character.ICE_GIRL);
     }
 }
 
@@ -72,3 +72,71 @@ public class IntroState : State
         
     }
 }
+
+public class PlayState : State
+{
+    private State nextState;
+
+    public Character character { get; private set; }
+
+    public PlayState(Character character)
+    {
+        this.nextState = this;
+        this.character = character;
+    }
+
+    public override void Start()
+    {
+        SignalManager.Inst.AddListener<JelloportationStartedSignal>(onJelloportationStarted);
+    }
+
+    public override State Update()
+    {
+        return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<JelloportationStartedSignal>(onJelloportationStarted);
+    }
+
+    private void onJelloportationStarted(Signal signal)
+    {
+        JelloportationStartedSignal jelloportationStartedSignal = (JelloportationStartedSignal)signal;
+        nextState = new JelloportState(jelloportationStartedSignal.destinationJelloporter, jelloportationStartedSignal.character);
+    }
+}
+
+public class JelloportState : State
+{
+    private Jelloporter destinationJelloporter;
+    private MainCharacter character;
+
+    public JelloportState(Jelloporter destinationJelloporter, MainCharacter character)
+    {
+        this.destinationJelloporter = destinationJelloporter;
+        this.character = character;
+    }
+
+    public override void Start()
+    {
+        CameraController.Inst.SetParent(destinationJelloporter.CameraHolder);
+    }
+
+    public override State Update()
+    {
+        float perportion = CameraController.Inst.MoveTowardParent();
+        character.MoveTowardJelloporter(destinationJelloporter, perportion);
+        if (perportion >= 1f)
+        {
+            if (character.Character == Character.ICE_GIRL)
+                return new PlayState(Character.BEEF_CAKE);
+            else
+                return new PlayState(Character.ICE_GIRL);
+        }
+        else
+            return this;
+    }
+}
+
+public enum Character { ICE_GIRL, BEEF_CAKE }

@@ -12,6 +12,10 @@ public class Jelloporter : MonoBehaviour
     private bool exitRight = true;
     public bool ExitRight { get { return exitRight; } }
 
+    [SerializeField]
+    private GameObject cameraHolder;
+    public GameObject CameraHolder { get { return cameraHolder; } }
+
     private Animator myAnimator = null;
 
     private void Start()
@@ -21,9 +25,10 @@ public class Jelloporter : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.tag == "Player")
+        if (connectedJelloporter != null && other.tag == "Player")
         {
-            SignalManager.Inst.FireSignal(new PlayerHitJelloporterSignal(this));
+            MainCharacter player = other.GetComponent<MainCharacter>();
+            SignalManager.Inst.FireSignal(new PlayerHitJelloporterSignal(this, player));
             if (myAnimator == null)
                 myAnimator = GetComponent<Animator>();
             myAnimator.SetTrigger("GetEntered");
