@@ -86,6 +86,7 @@ public class PlayerHitJelloporterSignal : Signal
     public PlayerHitJelloporterSignal(Jelloporter jelloporter, MainCharacter player)
     {
         this.jelloporter = jelloporter;
+        this.player = player;
     }
 }
 public class PlayerExitingJelloporterSignal : Signal
@@ -116,3 +117,23 @@ public class JelloporterArrivedAtPlateSignal : Signal
 }
 public class JelloportationFinishedSignal : Signal { }
 public class CharacterSwitchSignal : Signal { }
+public class MonsterAttackedPlayerSignal : Signal
+{
+    public MainCharacter player { get; private set; }
+    public Monster monster { get; private set; }
+    public MonsterAttackedPlayerSignal(MainCharacter player, Monster monster)
+    {
+        this.player = player;
+        this.monster = monster;
+    }
+}
+public class PlayerAttackedMonsterSignal : Signal
+{
+    public MainCharacter player { get; private set; }
+    public Monster monster { get; private set; }
+    public PlayerAttackedMonsterSignal(MainCharacter player, Monster monster)
+    {
+        this.player = player;
+        this.monster = monster;
+    }
+}

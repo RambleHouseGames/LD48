@@ -122,15 +122,33 @@ public class Jelloporter : MonoBehaviour
         myAnimator.SetTrigger(trigger);
     }
 
+    public JelloPlate GetCurrentPlate()
+    {
+        float distanceToTop = Vector2.Distance(transform.position, topPlate.transform.position);
+        float distanceToBottom = Vector2.Distance(transform.position, bottomPlate.transform.position);
+        if (distanceToTop < distanceToBottom)
+            return topPlate;
+        else
+            return bottomPlate;
+    }
+
+    public GameObject GetCurrentCameraHolder()
+    {
+        return GetCurrentPlate().CameraHolder;
+    }
+
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (RespondToCollisions)
         {
             MainCharacter player = other.GetComponent<MainCharacter>();
-            SignalManager.Inst.FireSignal(new PlayerHitJelloporterSignal(this, player));
-            if (myAnimator == null)
-                myAnimator = GetComponent<Animator>();
-            myAnimator.SetTrigger("GetEntered");
+            if (player != null)
+            {
+                SignalManager.Inst.FireSignal(new PlayerHitJelloporterSignal(this, player));
+                if (myAnimator == null)
+                    myAnimator = GetComponent<Animator>();
+                myAnimator.SetTrigger("GetEntered");
+            }
         }
     }
 }

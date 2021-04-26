@@ -4,7 +4,15 @@ using UnityEngine;
 
 public class GameStateManager : MonoBehaviour
 {
+    public static GameStateManager Inst;
+
     private State currentState = null;
+    public State CurrentState { get { return currentState; } }
+
+    private void Awake()
+    {
+        Inst = this;
+    }
 
     private void Update()
     {
