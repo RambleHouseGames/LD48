@@ -88,6 +88,7 @@ public class PlayState : State
     public override void Start()
     {
         SignalManager.Inst.AddListener<JelloportationStartedSignal>(onJelloportationStarted);
+        SignalManager.Inst.AddListener<CharacterSwitchSignal>(onCharacterSwitched);
     }
 
     public override State Update()
@@ -98,45 +99,58 @@ public class PlayState : State
     public override void End()
     {
         SignalManager.Inst.RemoveListener<JelloportationStartedSignal>(onJelloportationStarted);
+        SignalManager.Inst.RemoveListener<CharacterSwitchSignal>(onCharacterSwitched);
     }
 
     private void onJelloportationStarted(Signal signal)
     {
         JelloportationStartedSignal jelloportationStartedSignal = (JelloportationStartedSignal)signal;
-        nextState = new JelloportState(jelloportationStartedSignal.destinationJelloporter, jelloportationStartedSignal.character);
+        nextState = new JelloportState(character, jelloportationStartedSignal.newJelloState);
+    }
+
+    private void onCharacterSwitched(Signal signal)
+    {
+        if (character == Character.ICE_GIRL)
+            nextState = new PlayState(Character.BEEF_CAKE);
+        else
+            nextState = new PlayState(Character.ICE_GIRL);
     }
 }
 
 public class JelloportState : State
 {
-    private Jelloporter destinationJelloporter;
-    private MainCharacter character;
+    public Character activeCharacter;
+    public JelloState newJelloState;
 
-    public JelloportState(Jelloporter destinationJelloporter, MainCharacter character)
+    private State nextState;
+
+    public JelloportState(Character activeCharacter, JelloState newJelloState)
     {
-        this.destinationJelloporter = destinationJelloporter;
-        this.character = character;
+        this.activeCharacter = activeCharacter;
+        this.newJelloState = newJelloState;
+        nextState = this;
     }
 
     public override void Start()
     {
-        CameraController.Inst.SetParent(destinationJelloporter.CameraHolder);
+        SignalManager.Inst.AddListener<JelloportationFinishedSignal>(onJelloportationFinished);
     }
 
     public override State Update()
     {
-        float perportion = CameraController.Inst.MoveTowardParent();
-        character.MoveTowardJelloporter(destinationJelloporter, perportion);
-        if (perportion >= 1f)
-        {
-            if (character.Character == Character.ICE_GIRL)
-                return new PlayState(Character.BEEF_CAKE);
-            else
-                return new PlayState(Character.ICE_GIRL);
-        }
-        else
-            return this;
+        return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<JelloportationFinishedSignal>(onJelloportationFinished);
+    }
+
+    private void onJelloportationFinished(Signal signal)
+    {
+        nextState = new PlayState(activeCharacter);
     }
 }
 
 public enum Character { ICE_GIRL, BEEF_CAKE }
+public enum JelloState { PINK_UP_GREEN_DOWN, PINK_DOWN_GREEN_UP }

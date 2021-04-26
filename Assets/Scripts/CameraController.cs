@@ -14,23 +14,33 @@ public class CameraController : MonoBehaviour
         Inst = this;
     }
 
+    public void Start()
+    {
+        SignalManager.Inst.AddListener<JelloportationStartedSignal>(onJelloportationStarted);
+    }
+
+    private void Update()
+    {
+        MoveTowardParent();
+    }
+
+    private void onJelloportationStarted(Signal signal)
+    {
+        JelloportationStartedSignal jelloportationStartedSignal = (JelloportationStartedSignal)signal;
+        SetParent(jelloportationStartedSignal.destinationPlate.CameraHolder);
+    }
+
     public void SetParent(GameObject newParent)
     {
         transform.SetParent(newParent.transform);
     }
 
-    public float MoveTowardParent()
+    public void MoveTowardParent()
     {
         float distance = transform.localPosition.magnitude;
         if(distance < moveSpeed * Time.deltaTime)
-        {
             transform.localPosition = Vector3.zero;
-            return 1.1f;
-        }
         else
-        {
             transform.localPosition = Vector3.MoveTowards(transform.localPosition, Vector3.zero, moveSpeed * Time.deltaTime);
-            return (moveSpeed * Time.deltaTime) / distance;
-        }
     }
 }

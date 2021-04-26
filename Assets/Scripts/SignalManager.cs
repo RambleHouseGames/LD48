@@ -77,6 +77,8 @@ public class MoveButtonReleasedSignal : Signal
         this.moveButton = moveButton;
     }
 }
+public class AttackLockReleasedSignal : Signal { }
+public class AttackAnimationFinishedSignal : Signal { }
 public class PlayerHitJelloporterSignal : Signal
 {
     public Jelloporter jelloporter { get; private set; }
@@ -84,17 +86,6 @@ public class PlayerHitJelloporterSignal : Signal
     public PlayerHitJelloporterSignal(Jelloporter jelloporter, MainCharacter player)
     {
         this.jelloporter = jelloporter;
-    }
-}
-public class JelloportationStartedSignal : Signal
-{
-    public Jelloporter destinationJelloporter { get; private set; }
-    public MainCharacter character { get; private set; }
-
-    public JelloportationStartedSignal(Jelloporter jelloporter, MainCharacter character)
-    {
-        this.destinationJelloporter = jelloporter;
-        this.character = character;
     }
 }
 public class PlayerExitingJelloporterSignal : Signal
@@ -105,3 +96,23 @@ public class PlayerExitingJelloporterSignal : Signal
         this.jelloporter = jelloporter;
     }
 }
+public class JelloportationStartedSignal : Signal
+{
+    public JelloState newJelloState;
+    public JelloPlate destinationPlate;
+    public JelloportationStartedSignal (JelloState newJelloState, JelloPlate destinationPlate)
+    {
+        this.newJelloState = newJelloState;
+        this.destinationPlate = destinationPlate;
+    }
+}
+public class JelloporterArrivedAtPlateSignal : Signal
+{
+    public Jelloporter jelloporter { get; private set; }
+    public JelloporterArrivedAtPlateSignal(Jelloporter jelloporter)
+    {
+        this.jelloporter = jelloporter;
+    }
+}
+public class JelloportationFinishedSignal : Signal { }
+public class CharacterSwitchSignal : Signal { }

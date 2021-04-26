@@ -14,10 +14,19 @@ public class MainCharacter : MonoBehaviour
     private float apexVelocity = .25f;
 
     [SerializeField]
+    private float kickBoostVelocity = 2f;
+
+    [SerializeField]
     private float enterJelloporterSpeed = 5f;
 
     [SerializeField]
-    private Collider2D groundCollider;
+    private TouchTrigger groundCollider;
+
+    [SerializeField]
+    private TouchTrigger leftBlockCollider;
+
+    [SerializeField]
+    private TouchTrigger rightBlockCollider;
 
     [SerializeField]
     private Character character;
@@ -28,7 +37,16 @@ public class MainCharacter : MonoBehaviour
     private SpriteRenderer myRenderer = null;
     private Rigidbody2D myRigidbody = null;
 
-    public bool IsGrounded { get; private set; }
+    public bool IsGrounded { get
+        {
+            if (groundCollider.IsTriggered)
+                CanJumpKick = true;
+            return groundCollider.IsTriggered;
+        }
+    }
+    public bool IsBlockedLeft { get { return leftBlockCollider.IsTriggered; } }
+    public bool IsBlockedRight { get { return rightBlockCollider.IsTriggered; } }
+    public bool CanJumpKick = true;
 
     private void Update()
     {
@@ -36,27 +54,14 @@ public class MainCharacter : MonoBehaviour
         {
             currentState = new WaitToStart(this);
             currentState.Start();
-            //SignalManager.Inst.FireSignal(new StateStartedSignal(currentState));
         }
         CharacterState nextState = currentState.Update();
         if (nextState != currentState)
         {
             currentState.End();
-            //SignalManager.Inst.FireSignal(new StateEndingSignal(currentState));
             currentState = nextState;
             nextState.Start();
-            //SignalManager.Inst.FireSignal(new StateStartedSignal(currentState));
         }
-    }
-
-    private void OnTriggerStay2D(Collider2D collision)
-    {
-        IsGrounded = (collision != null) && (collision.tag == "ground");
-    }
-
-    private void OnTriggerExit2D(Collider2D collision)
-    {
-        IsGrounded = false;
     }
 
     public void FireAnimationTrigger(string trigger)
@@ -107,6 +112,16 @@ public class MainCharacter : MonoBehaviour
         myRigidbody.velocity = new Vector2(myRigidbody.velocity.x, jumpVelocity);
     }
 
+    public void KickBoost()
+    {
+        if (myRigidbody == null)
+            myRigidbody = GetComponent<Rigidbody2D>();
+        float newYVelocity = myRigidbody.velocity.y + kickBoostVelocity;
+        if (newYVelocity < kickBoostVelocity)
+            newYVelocity = kickBoostVelocity;
+        myRigidbody.velocity = new Vector2(myRigidbody.velocity.x, newYVelocity);
+    }
+
     public bool IsUpping()
     {
         return myRigidbody.velocity.y > apexVelocity;
@@ -155,12 +170,6 @@ public class MainCharacter : MonoBehaviour
         myRigidbody.velocity = exitVelocity;
     }
 
-    public void MoveTowardJelloporter(Jelloporter destination, float perportion)
-    {
-        float distance = Vector2.Distance(transform.position, destination.transform.position);
-        transform.position = Vector2.MoveTowards(transform.position, destination.transform.position, distance * perportion);
-    }
-
     public void SetKinematic(bool shouldBeKinematic)
     {
         if (myRigidbody == null)
@@ -168,6 +177,15 @@ public class MainCharacter : MonoBehaviour
         myRigidbody.isKinematic = shouldBeKinematic;
     }
 
+    public void OnAttackLockReleased()
+    {
+        SignalManager.Inst.FireSignal(new AttackLockReleasedSignal());
+    }
+
+    public void OnAttackAnimationFinsished()
+    {
+        SignalManager.Inst.FireSignal(new AttackAnimationFinishedSignal());
+    }
 }
 
 public abstract class CharacterState : State
@@ -212,11 +230,12 @@ public class WaitToStart : CharacterState
 
     private void onStateStarted(Signal signal)
     {
+
         StateStartedSignal stateStartedSignal = (StateStartedSignal)signal;
         if (stateStartedSignal.startedState.GetType() == typeof(PlayState))
         {
             PlayState playState = (PlayState)stateStartedSignal.startedState;
-            if(playState.character == thisCharacter.Character)
+            if (playState.character == thisCharacter.Character)
                 nextState = new IdleState(thisCharacter);
         }
     }
@@ -268,6 +287,16 @@ public class IdleState : CharacterState
                 else
                     nextState = new JumpRightState(thisCharacter);
                 break;
+            case MoveButton.ATTACK:
+                if (thisCharacter.IsFacingLeft())
+                    nextState = new StandingKickLeftState(thisCharacter);
+                else
+                    nextState = new StandingKickRightState(thisCharacter);
+                break;
+            case MoveButton.SWITCH:
+                SignalManager.Inst.FireSignal(new CharacterSwitchSignal());
+                nextState = new WaitToStart(thisCharacter);
+                break;
         }
     }
 
@@ -275,6 +304,144 @@ public class IdleState : CharacterState
     {
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+}
+
+public class StandingKickLeftState : CharacterState
+{
+    private bool attackLocked = true;
+    private CharacterState nextState;
+
+    public StandingKickLeftState(MainCharacter thisCharacter) : base (thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        this.thisCharacter.SetHorizFlip(true);
+        SignalManager.Inst.AddListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.AddListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+        thisCharacter.FireAnimationTrigger("StandingKick");
+    }
+
+    public override CharacterState Update()
+    {
+        if (attackLocked)
+            return this;
+        else
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                return new RunLeftState(thisCharacter);
+            else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                return new RunRightState(thisCharacter);
+            else
+                return nextState;
+        }
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.RemoveListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onAttackLockReleased(Signal signal)
+    {
+        attackLocked = false;
+    }
+
+    private void onAttackAnimationFinished(Signal signal)
+    {
+        if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            nextState = new RunLeftState(thisCharacter);
+        else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            nextState = new RunRightState(thisCharacter);
+        else
+            nextState = new IdleState(thisCharacter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if(!attackLocked && moveButtonPressedSignal.moveButton == MoveButton.JUMP)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new JumpRightState(thisCharacter);
+            else
+                nextState = new JumpLeftState(thisCharacter);
+        }
+    }
+}
+
+public class StandingKickRightState : CharacterState
+{
+    private bool attackLocked = true;
+    private CharacterState nextState;
+
+    public StandingKickRightState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        this.thisCharacter.SetHorizFlip(false);
+        SignalManager.Inst.AddListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.AddListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+        thisCharacter.FireAnimationTrigger("StandingKick");
+    }
+
+    public override CharacterState Update()
+    {
+        if (attackLocked)
+            return this;
+        else
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                return new RunRightState(thisCharacter);
+            else if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                return new RunLeftState(thisCharacter);
+            else
+                return nextState;
+        }
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.RemoveListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onAttackLockReleased(Signal signal)
+    {
+        attackLocked = false;
+    }
+
+    private void onAttackAnimationFinished(Signal signal)
+    {
+        if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            nextState = new RunRightState(thisCharacter);
+        else if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            nextState = new RunLeftState(thisCharacter);
+        else
+            nextState = new IdleState(thisCharacter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (!attackLocked && moveButtonPressedSignal.moveButton == MoveButton.JUMP)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new JumpLeftState(thisCharacter);
+            else
+                nextState = new JumpRightState(thisCharacter);
+        }
     }
 }
 
@@ -299,6 +466,8 @@ public class RunLeftState : CharacterState
 
     public override CharacterState Update()
     {
+        if (thisCharacter.IsBlockedLeft)
+            return new PushLeftState(thisCharacter);
         if(nextState == this)
             thisCharacter.MoveLeft();
         return nextState;
@@ -322,6 +491,10 @@ public class RunLeftState : CharacterState
                 break;
             case MoveButton.JUMP:
                 nextState = new JumpLeftState(thisCharacter);
+                canRelease = false;
+                break;
+            case MoveButton.ATTACK:
+                nextState = new RunningKickLeftState(thisCharacter);
                 canRelease = false;
                 break;
         }
@@ -367,7 +540,9 @@ public class RunRightState : CharacterState
 
     public override CharacterState Update()
     {
-        if(nextState == this)
+        if (thisCharacter.IsBlockedRight)
+            return new PushRightState(thisCharacter);
+        if (nextState == this)
             thisCharacter.MoveRight();
         return nextState;
     }
@@ -392,6 +567,10 @@ public class RunRightState : CharacterState
                 nextState = new JumpRightState(thisCharacter);
                 canRelease = false;
                 break;
+            case MoveButton.ATTACK:
+                nextState = new RunningKickRightState(thisCharacter);
+                canRelease = false;
+                break;
         }
     }
 
@@ -411,6 +590,254 @@ public class RunRightState : CharacterState
     {
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+}
+
+public class PushLeftState : CharacterState
+{
+    private CharacterState nextState;
+
+    public PushLeftState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        thisCharacter.FireAnimationTrigger("Push");
+        thisCharacter.SetHorizFlip(true);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    public override CharacterState Update()
+    {
+        if (nextState != this)
+            return nextState;
+        if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            return new RunRightState(thisCharacter);
+        else if (!InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            return new IdleState(thisCharacter);
+        else if (thisCharacter.IsBlockedLeft)
+            return this;
+        else
+            return new RunLeftState(thisCharacter);
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.JUMP)
+            nextState = new JumpLeftState(thisCharacter);
+    }
+}
+
+public class PushRightState : CharacterState
+{
+    private CharacterState nextState;
+
+    public PushRightState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        thisCharacter.FireAnimationTrigger("Push");
+        thisCharacter.SetHorizFlip(false);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    public override CharacterState Update()
+    {
+        if (nextState != this)
+            return nextState;
+        if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            return new RunLeftState(thisCharacter);
+        else if (!InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            return new IdleState(thisCharacter);
+        else if (thisCharacter.IsBlockedRight)
+            return this;
+        else
+            return new RunRightState(thisCharacter);
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.JUMP)
+            nextState = new JumpRightState(thisCharacter);
+    }
+}
+
+public class RunningKickLeftState : CharacterState
+{
+    private bool attackLocked = true;
+    private CharacterState nextState;
+
+    public RunningKickLeftState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        this.thisCharacter.SetHorizFlip(true);
+        SignalManager.Inst.AddListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.AddListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+        thisCharacter.FireAnimationTrigger("RunningKick");
+    }
+
+    public override CharacterState Update()
+    {
+        if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        else if (attackLocked)
+            return this;
+        else if (nextState == this)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                return nextState;
+            else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                return new RunRightState(thisCharacter);
+            else
+                return new IdleState(thisCharacter);
+        }
+        else
+            return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.RemoveListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onAttackLockReleased(Signal signal)
+    {
+        attackLocked = false;
+    }
+
+    private void onAttackAnimationFinished(Signal signal)
+    {
+        if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            nextState = new RunLeftState(thisCharacter);
+        else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            nextState = new RunRightState(thisCharacter);
+        else
+            nextState = new IdleState(thisCharacter);
+    }
+
+    private void onPlayerHitJelloporter(Signal signal)
+    {
+        PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
+        nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (!attackLocked && moveButtonPressedSignal.moveButton == MoveButton.JUMP)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new JumpRightState(thisCharacter);
+            else
+                nextState = new JumpLeftState(thisCharacter);
+        }
+    }
+}
+
+public class RunningKickRightState : CharacterState
+{
+    private bool attackLocked = true;
+    private CharacterState nextState;
+
+    public RunningKickRightState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        this.thisCharacter.SetHorizFlip(false);
+        SignalManager.Inst.AddListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.AddListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+        thisCharacter.FireAnimationTrigger("RunningKick");
+    }
+
+    public override CharacterState Update()
+    {
+        if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        else if (attackLocked)
+            return this;
+        else if (nextState == this)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                return nextState;
+            else if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                return new RunLeftState(thisCharacter);
+            else
+                return new IdleState(thisCharacter);
+        }
+        else
+            return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.RemoveListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onAttackLockReleased(Signal signal)
+    {
+        attackLocked = false;
+    }
+
+    private void onAttackAnimationFinished(Signal signal)
+    {
+        if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+            nextState = new RunLeftState(thisCharacter);
+        else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+            nextState = new RunRightState(thisCharacter);
+        else
+            nextState = new IdleState(thisCharacter);
+    }
+
+    private void onPlayerHitJelloporter(Signal signal)
+    {
+        PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
+        nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (!attackLocked && moveButtonPressedSignal.moveButton == MoveButton.JUMP)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new JumpLeftState(thisCharacter);
+            else
+                nextState = new JumpRightState(thisCharacter);
+        }
     }
 }
 
@@ -528,14 +955,17 @@ public class FlyUpLeftState : CharacterState
         thisCharacter.SetHorizFlip(true);
         thisCharacter.FireAnimationTrigger("JumpUp");
         SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     public override CharacterState Update()
     {
         if (nextState.GetType() == typeof(EnterJelloporterState))
             return nextState;
+        if (nextState.GetType() == typeof(FlyingKickLeftState) || nextState.GetType() == typeof(FlyingKickRightState))
+            return nextState;
 
-        if (!InputHandler.Inst.ButtonIsDown(MoveButton.JUMP))
+            if (!InputHandler.Inst.ButtonIsDown(MoveButton.JUMP))
             thisCharacter.StopJump();
         if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT) && !InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
             thisCharacter.MoveLeft();
@@ -579,12 +1009,25 @@ public class FlyUpLeftState : CharacterState
     public override void End()
     {
         SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     private void onPlayerHitJelloporter(Signal signal)
     {
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.ATTACK)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new FlyingKickRightState(thisCharacter);
+            else
+                nextState = new FlyingKickLeftState(thisCharacter);
+        }
     }
 }
 
@@ -602,11 +1045,14 @@ public class FlyUpRightState : CharacterState
         thisCharacter.SetHorizFlip(false);
         thisCharacter.FireAnimationTrigger("JumpUp");
         SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     public override CharacterState Update()
     {
         if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        if (nextState.GetType() == typeof(FlyingKickLeftState) || nextState.GetType() == typeof(FlyingKickRightState))
             return nextState;
 
         if (!InputHandler.Inst.ButtonIsDown(MoveButton.JUMP))
@@ -653,12 +1099,25 @@ public class FlyUpRightState : CharacterState
     public override void End()
     {
         SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     private void onPlayerHitJelloporter(Signal signal)
     {
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.ATTACK)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new FlyingKickLeftState(thisCharacter);
+            else
+                nextState = new FlyingKickRightState(thisCharacter);
+        }
     }
 }
 
@@ -676,11 +1135,14 @@ public class FlyTopLeftState : CharacterState
         thisCharacter.SetHorizFlip(true);
         thisCharacter.FireAnimationTrigger("JumpTop");
         SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     public override CharacterState Update()
     {
         if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        if (nextState.GetType() == typeof(FlyingKickLeftState) || nextState.GetType() == typeof(FlyingKickRightState))
             return nextState;
 
         if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT) && !InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
@@ -725,12 +1187,25 @@ public class FlyTopLeftState : CharacterState
     public override void End()
     {
         SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     private void onPlayerHitJelloporter(Signal signal)
     {
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.ATTACK)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new FlyingKickRightState(thisCharacter);
+            else
+                nextState = new FlyingKickLeftState(thisCharacter);
+        }
     }
 }
 
@@ -748,11 +1223,14 @@ public class FlyTopRightState : CharacterState
         thisCharacter.SetHorizFlip(false);
         thisCharacter.FireAnimationTrigger("JumpTop");
         SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     public override CharacterState Update()
     {
         if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        if (nextState.GetType() == typeof(FlyingKickLeftState) || nextState.GetType() == typeof(FlyingKickRightState))
             return nextState;
 
         if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT) && !InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
@@ -797,6 +1275,7 @@ public class FlyTopRightState : CharacterState
     public override void End()
     {
         SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     private void onPlayerHitJelloporter(Signal signal)
@@ -804,11 +1283,24 @@ public class FlyTopRightState : CharacterState
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
     }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.ATTACK)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new FlyingKickLeftState(thisCharacter);
+            else
+                nextState = new FlyingKickRightState(thisCharacter);
+        }
+    }
 }
 
 public class FlyDownLeftState : CharacterState
 {
     private CharacterState nextState;
+    private bool canJumpKick = false;
 
     public FlyDownLeftState(MainCharacter character) : base(character)
     {
@@ -817,14 +1309,18 @@ public class FlyDownLeftState : CharacterState
 
     public override void Start()
     {
+        this.canJumpKick = thisCharacter.CanJumpKick;
         thisCharacter.SetHorizFlip(true);
         thisCharacter.FireAnimationTrigger("JumpDown");
         SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     public override CharacterState Update()
     {
         if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        if (nextState.GetType() == typeof(FlyingKickLeftState) || nextState.GetType() == typeof(FlyingKickRightState))
             return nextState;
 
         if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT) && !InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
@@ -849,13 +1345,6 @@ public class FlyDownLeftState : CharacterState
                 return new FlyUpRightState(thisCharacter);
             else
                 return new FlyUpLeftState(thisCharacter);
-        }
-        else if (thisCharacter.IsTopping())
-        {
-            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
-                return new FlyTopRightState(thisCharacter);
-            else
-                return new FlyTopLeftState(thisCharacter);
         }
         else
         {
@@ -869,6 +1358,7 @@ public class FlyDownLeftState : CharacterState
     public override void End()
     {
         SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     private void onPlayerHitJelloporter(Signal signal)
@@ -876,11 +1366,24 @@ public class FlyDownLeftState : CharacterState
         PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
         nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
     }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.ATTACK)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new FlyingKickRightState(thisCharacter);
+            else
+                nextState = new FlyingKickLeftState(thisCharacter);
+        }
+    }
 }
 
 public class FlyDownRightState : CharacterState
 {
     private CharacterState nextState;
+    private bool canJumpKick = false;
 
     public FlyDownRightState(MainCharacter character) : base(character)
     {
@@ -889,14 +1392,18 @@ public class FlyDownRightState : CharacterState
 
     public override void Start()
     {
+        this.canJumpKick = thisCharacter.CanJumpKick;
         thisCharacter.SetHorizFlip(false);
         thisCharacter.FireAnimationTrigger("JumpDown");
         SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
     }
 
     public override CharacterState Update()
     {
         if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        if (nextState.GetType() == typeof(FlyingKickLeftState) || nextState.GetType() == typeof(FlyingKickRightState))
             return nextState;
 
         if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT) && !InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
@@ -922,13 +1429,6 @@ public class FlyDownRightState : CharacterState
             else
                 return new FlyUpRightState(thisCharacter);
         }
-        else if (thisCharacter.IsTopping())
-        {
-            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
-                return new FlyTopLeftState(thisCharacter);
-            else
-                return new FlyTopRightState(thisCharacter);
-        }
         else
         {
             if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
@@ -941,6 +1441,191 @@ public class FlyDownRightState : CharacterState
     public override void End()
     {
         SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        SignalManager.Inst.RemoveListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+    }
+
+    private void onPlayerHitJelloporter(Signal signal)
+    {
+        PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
+        nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+
+    private void onMoveButtonPressed(Signal signal)
+    {
+        MoveButtonPressedSignal moveButtonPressedSignal = (MoveButtonPressedSignal)signal;
+        if (moveButtonPressedSignal.moveButton == MoveButton.ATTACK)
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new FlyingKickLeftState(thisCharacter);
+            else
+                nextState = new FlyingKickRightState(thisCharacter);
+        }
+    }
+}
+
+public class FlyingKickLeftState : CharacterState
+{
+    private bool attackLocked = true;
+    private CharacterState nextState;
+
+    public FlyingKickLeftState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        thisCharacter.CanJumpKick = false;
+        this.thisCharacter.KickBoost();
+        this.thisCharacter.SetHorizFlip(true);
+        SignalManager.Inst.AddListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.AddListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        thisCharacter.FireAnimationTrigger("FlyingKick");
+    }
+
+    public override CharacterState Update()
+    {
+        if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        else if (attackLocked)
+            return this;
+        else
+        {
+            if(thisCharacter.IsGrounded)
+            {
+                if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                    return new RunLeftState(thisCharacter);
+                else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                    return new RunRightState(thisCharacter);
+                else
+                    return new IdleState(thisCharacter);
+            }
+            return nextState;
+        }
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.RemoveListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+    }
+
+    private void onAttackLockReleased(Signal signal)
+    {
+        attackLocked = false;
+    }
+
+    private void onAttackAnimationFinished(Signal signal)
+    {
+        if (thisCharacter.IsUpping())
+        {
+            if(InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new FlyUpRightState(thisCharacter);
+            else
+                nextState = new FlyUpLeftState(thisCharacter);
+        }
+        else if (thisCharacter.IsTopping())
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new FlyTopRightState(thisCharacter);
+            else
+                nextState = new FlyTopLeftState(thisCharacter);
+        }
+        else if (thisCharacter.IsDowning())
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                nextState = new FlyDownRightState(thisCharacter);
+            else
+                nextState = new FlyDownLeftState(thisCharacter);
+        }
+    }
+
+    private void onPlayerHitJelloporter(Signal signal)
+    {
+        PlayerHitJelloporterSignal playerHitJelloporterSignal = (PlayerHitJelloporterSignal)signal;
+        nextState = new EnterJelloporterState(thisCharacter, playerHitJelloporterSignal.jelloporter);
+    }
+}
+
+public class FlyingKickRightState : CharacterState
+{
+    private bool attackLocked = true;
+    private CharacterState nextState;
+
+    public FlyingKickRightState(MainCharacter thisCharacter) : base(thisCharacter)
+    {
+        nextState = this;
+    }
+
+    public override void Start()
+    {
+        thisCharacter.CanJumpKick = false;
+        this.thisCharacter.KickBoost();
+        this.thisCharacter.SetHorizFlip(false);
+        SignalManager.Inst.AddListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.AddListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.AddListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+        thisCharacter.FireAnimationTrigger("FlyingKick");
+    }
+
+    public override CharacterState Update()
+    {
+        if (nextState.GetType() == typeof(EnterJelloporterState))
+            return nextState;
+        else if (attackLocked)
+            return this;
+        else
+        {
+            if (thisCharacter.IsGrounded)
+            {
+                if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                    return new RunLeftState(thisCharacter);
+                else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                    return new RunRightState(thisCharacter);
+                else
+                    return new IdleState(thisCharacter);
+            }
+            return nextState;
+        }
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<AttackLockReleasedSignal>(onAttackLockReleased);
+        SignalManager.Inst.RemoveListener<AttackAnimationFinishedSignal>(onAttackAnimationFinished);
+        SignalManager.Inst.RemoveListener<PlayerHitJelloporterSignal>(onPlayerHitJelloporter);
+    }
+
+    private void onAttackLockReleased(Signal signal)
+    {
+        attackLocked = false;
+    }
+
+    private void onAttackAnimationFinished(Signal signal)
+    {
+        if (thisCharacter.IsUpping())
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new FlyUpLeftState(thisCharacter);
+            else
+                nextState = new FlyUpRightState(thisCharacter);
+        }
+        else if (thisCharacter.IsTopping())
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new FlyTopLeftState(thisCharacter);
+            else
+                nextState = new FlyTopRightState(thisCharacter);
+        }
+        else if (thisCharacter.IsDowning())
+        {
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                nextState = new FlyDownLeftState(thisCharacter);
+            else
+                nextState = new FlyDownRightState(thisCharacter);
+        }
     }
 
     private void onPlayerHitJelloporter(Signal signal)
@@ -957,32 +1642,40 @@ public class EnterJelloporterState : CharacterState {
         this.jelloporter = jelloporter;
     }
 
+    public override void Start()
+    {
+        thisCharacter.transform.parent = jelloporter.transform;
+        thisCharacter.StopMove();
+        thisCharacter.StopJump();
+        thisCharacter.SetKinematic(true);
+        thisCharacter.FireAnimationTrigger("Idle");
+    }
+
     public override CharacterState Update()
     {
         if (thisCharacter.EnterJelloporter(jelloporter))
-            return new JelloportationState(thisCharacter, jelloporter.ConnectedJelloporter);
+            return new RideJelloporterState(thisCharacter, jelloporter);
         else
             return this;
     }
 }
 
-public class JelloportationState : CharacterState
+public class RideJelloporterState : CharacterState
 {
-    private CharacterState nextState;
+    Jelloporter jelloporter;
+    CharacterState nextState;
 
-    private Jelloporter destinationJelloporter;
-    public JelloportationState(MainCharacter thisCharacter, Jelloporter destinationJelloporter) : base(thisCharacter)
+    public RideJelloporterState(MainCharacter thisCharacter, Jelloporter jelloporter) : base(thisCharacter)
     {
-        nextState = this;
-        this.destinationJelloporter = destinationJelloporter;
+        this.jelloporter = jelloporter;
+        this.nextState = this;
     }
 
     public override void Start()
     {
-        thisCharacter.FireAnimationTrigger("Jello");
-        thisCharacter.SetKinematic(true);
-        SignalManager.Inst.AddListener<StateStartedSignal>(onStateStarted);
-        SignalManager.Inst.FireSignal(new JelloportationStartedSignal(destinationJelloporter, thisCharacter));
+        SignalManager.Inst.AddListener<JelloporterArrivedAtPlateSignal>(onJelloporterArrivedAtPlate);
+        JelloState nextJelloState = jelloporter.ChooseNextState();
+        SignalManager.Inst.FireSignal(new JelloportationStartedSignal(nextJelloState, jelloporter.ChooseDestination(nextJelloState)));
     }
 
     public override CharacterState Update()
@@ -992,17 +1685,14 @@ public class JelloportationState : CharacterState
 
     public override void End()
     {
-        thisCharacter.SetKinematic(false);
-        SignalManager.Inst.RemoveListener<StateStartedSignal>(onStateStarted);
+        SignalManager.Inst.RemoveListener<JelloporterArrivedAtPlateSignal>(onJelloporterArrivedAtPlate);
     }
 
-    private void onStateStarted(Signal signal)
+    private void onJelloporterArrivedAtPlate(Signal signal)
     {
-        StateStartedSignal stateStartedSignal = (StateStartedSignal)signal;
-        if(stateStartedSignal.startedState.GetType() == typeof(PlayState))
-        {
-            nextState = new ExitJelloporterState(thisCharacter, destinationJelloporter);
-        }
+        JelloporterArrivedAtPlateSignal jelloporterArrivedAtPlateSignal = (JelloporterArrivedAtPlateSignal)signal;
+        if (jelloporterArrivedAtPlateSignal.jelloporter == jelloporter)
+            nextState = new ExitJelloporterState(thisCharacter, jelloporter);
     }
 }
 
@@ -1016,6 +1706,9 @@ public class ExitJelloporterState : CharacterState
 
     public override void Start()
     {
+        SignalManager.Inst.FireSignal(new PlayerExitingJelloporterSignal(jelloporter));
+        thisCharacter.transform.SetParent(null);
+        thisCharacter.SetKinematic(false);
         Vector2 exitVelocity = new Vector2(-5f, 10f);
         if (jelloporter.ExitRight)
         {
@@ -1025,18 +1718,19 @@ public class ExitJelloporterState : CharacterState
         else
             thisCharacter.SetHorizFlip(true);
         thisCharacter.SnapToJelloporterAndSetExitVelocity(jelloporter, exitVelocity);
-        SignalManager.Inst.FireSignal(new PlayerExitingJelloporterSignal(jelloporter));
     }
 
     public override CharacterState Update()
     {
         if (thisCharacter.IsGrounded)
         {
-            //if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
-            //    return new RunLeftState(thisCharacter);
-            //else if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
-            //    return new RunRightState(thisCharacter);
-            return new WaitToStart(thisCharacter);
+            SignalManager.Inst.FireSignal(new JelloportationFinishedSignal());
+            if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
+                return new RunRightState(thisCharacter);
+            else if (InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
+                return new RunLeftState(thisCharacter);
+            else
+                return new IdleState(thisCharacter);
         }
         else
         {
