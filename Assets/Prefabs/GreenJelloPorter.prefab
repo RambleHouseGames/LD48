@@ -77,11 +77,13 @@ PolygonCollider2D:
   m_AutoTiling: 0
   m_Points:
     m_Paths:
-    - - {x: 0, y: 1.34}
-      - {x: -0.95105654, y: 1.19}
-      - {x: -1.26, y: -0.05}
-      - {x: 1.26, y: -0.05}
-      - {x: 0.9510565, y: 1.19}
+    - - {x: 0, y: 0.51}
+      - {x: -0.26, y: 0.45}
+      - {x: -0.45, y: -0.05}
+      - {x: -0.27, y: -0.31}
+      - {x: 0.27, y: -0.31}
+      - {x: 0.45, y: -0.05}
+      - {x: 0.26, y: 0.45}
 --- !u!95 &585625930713666589
 Animator:
   serializedVersion: 3
@@ -172,7 +174,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 3
-  m_Sprite: {fileID: 21300000, guid: 413281c7d627046e9943f3caa42ffcee, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 2325a3233c2a64144b682aa43b3bc29e, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -254,7 +256,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 1
-  m_Sprite: {fileID: 21300000, guid: 413281c7d627046e9943f3caa42ffcee, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 2325a3233c2a64144b682aa43b3bc29e, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0

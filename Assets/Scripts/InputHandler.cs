@@ -24,9 +24,9 @@ public class InputHandler : MonoBehaviour
 
     private void Update()
     {
-        if(buttonsDown[MoveButton.LEFT] != Input.GetKey(KeyCode.A))
+        if(buttonsDown[MoveButton.LEFT] != (Input.GetKey(KeyCode.A) || Input.GetAxis("Horizontal") < -.2f || Input.GetAxis("DPad X") < -.2f))
         {
-            if (Input.GetKey(KeyCode.A))
+            if (Input.GetKey(KeyCode.A) || Input.GetAxis("Horizontal") < -.2f || Input.GetAxis("DPad X") < -.2f)
             {
                 SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.LEFT));
                 buttonsDown[MoveButton.LEFT] = true;
@@ -37,9 +37,9 @@ public class InputHandler : MonoBehaviour
                 buttonsDown[MoveButton.LEFT] = false;
             }
         }
-        if (buttonsDown[MoveButton.RIGHT] != Input.GetKey(KeyCode.D))
+        if (buttonsDown[MoveButton.RIGHT] != Input.GetKey(KeyCode.D) || Input.GetAxis("Horizontal") > .2f || Input.GetAxis("DPad X") > .2f)
         {
-            if (Input.GetKey(KeyCode.D))
+            if (Input.GetKey(KeyCode.D) || Input.GetAxis("Horizontal") > .2f || Input.GetAxis("DPad X") > .2f)
             {
                 SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.RIGHT));
                 buttonsDown[MoveButton.RIGHT] = true;
@@ -50,9 +50,9 @@ public class InputHandler : MonoBehaviour
                 buttonsDown[MoveButton.RIGHT] = false;
             }
         }
-        if (buttonsDown[MoveButton.JUMP] != Input.GetKey(KeyCode.W))
+        if (buttonsDown[MoveButton.JUMP] != Input.GetKey(KeyCode.W) || Input.GetAxis("Vertical") > .2f || Input.GetAxis("DPad Y") > .2f)
         {
-            if (Input.GetKey(KeyCode.W))
+            if (Input.GetKey(KeyCode.W) || Input.GetAxis("Vertical") > .2f || Input.GetAxis("DPad Y") > .2f)
             {
                 SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.JUMP));
                 buttonsDown[MoveButton.JUMP] = true;
@@ -63,9 +63,9 @@ public class InputHandler : MonoBehaviour
                 buttonsDown[MoveButton.JUMP] = false;
             }
         }
-        if (buttonsDown[MoveButton.ATTACK] != Input.GetKey(KeyCode.Space))
+        if (buttonsDown[MoveButton.ATTACK] != (Input.GetKey(KeyCode.Space) || Input.GetKey("joystick button 0")))
         {
-            if (Input.GetKey(KeyCode.Space))
+            if (Input.GetKey(KeyCode.Space) || Input.GetKey("joystick button 0"))
             {
                 SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.ATTACK));
                 buttonsDown[MoveButton.ATTACK] = true;
@@ -76,9 +76,9 @@ public class InputHandler : MonoBehaviour
                 buttonsDown[MoveButton.ATTACK] = false;
             }
         }
-        if (buttonsDown[MoveButton.SWITCH] != Input.GetKey(KeyCode.E))
+        if (buttonsDown[MoveButton.SWITCH] != (Input.GetKey(KeyCode.E) || Input.GetKey("joystick button 1")))
         {
-            if (Input.GetKey(KeyCode.E))
+            if (Input.GetKey(KeyCode.E) || Input.GetKey("joystick button 1"))
             {
                 SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.SWITCH));
                 buttonsDown[MoveButton.SWITCH] = true;

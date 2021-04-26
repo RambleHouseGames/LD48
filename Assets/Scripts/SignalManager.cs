@@ -137,3 +137,19 @@ public class PlayerAttackedMonsterSignal : Signal
         this.monster = monster;
     }
 }
+public class PlayerFinishedUnjelloSignal : Signal
+{
+    public MainCharacter player { get; private set; }
+    public PlayerFinishedUnjelloSignal(MainCharacter player)
+    {
+        this.player = player;
+    }
+}
+public class ObstacleButtonChangedStateSignal : Signal
+{
+    public ObstacleButton obstacleButton { get; private set; }
+    public ObstacleButtonChangedStateSignal(ObstacleButton obstacleButton)
+    {
+        this.obstacleButton = obstacleButton;
+    }
+}

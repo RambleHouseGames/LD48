@@ -21,7 +21,7 @@ public class EyeSickle : Monster
         RightBoundary.transform.SetParent(null);
     }
 
-    void Update()
+    public override void Update()
     {
         if (myRenderer == null)
             myRenderer = GetComponent<SpriteRenderer>();
@@ -29,7 +29,7 @@ public class EyeSickle : Monster
             walkRight();
         else
             walkLeft();
-
+        base.Update();
     }
 
     private void walkLeft()

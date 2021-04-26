@@ -6,6 +6,8 @@ TagManager:
   tags:
   - ground
   - PlayerSensor
+  - PlayerAttack
+  - IceBlock
   layers:
   - Default
   - TransparentFX

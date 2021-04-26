@@ -33,6 +33,15 @@ public class MainCharacter : MonoBehaviour
     private Collider2D mainCollider;
 
     [SerializeField]
+    private Collider2D standingKickCollider;
+
+    [SerializeField]
+    private Collider2D runningKickCollider;
+
+    [SerializeField]
+    private Collider2D flyingKickCollider;
+
+    [SerializeField]
     private Character character;
     public Character Character { get { return character; } }
 
@@ -88,6 +97,12 @@ public class MainCharacter : MonoBehaviour
         if (myRenderer == null)
             myRenderer = GetComponent<SpriteRenderer>();
         myRenderer.flipX = shouldFlip;
+        float colliderScale = 1f;
+        if (shouldFlip)
+            colliderScale = -1f;
+        standingKickCollider.transform.localScale = new Vector3(colliderScale, 1f);
+        runningKickCollider.transform.localScale = new Vector3(colliderScale, 1f);
+        flyingKickCollider.transform.localScale = new Vector3(colliderScale, 1f);
     }
     public void MoveRight()
     {
@@ -225,6 +240,21 @@ public class MainCharacter : MonoBehaviour
     public JelloPlate GetWaypoint()
     {
         return wayPoint;
+    }
+
+    public void onUnjellofied()
+    {
+        SignalManager.Inst.FireSignal(new PlayerFinishedUnjelloSignal(this));
+    }
+
+    public GameObject GetLeftBlocker()
+    {
+        return leftBlockCollider.blockingObject;
+    }
+
+    public GameObject GetRightBlocker()
+    {
+        return rightBlockCollider.blockingObject;
     }
 }
 
@@ -692,6 +722,7 @@ public class RunRightState : CharacterState
 public class PushLeftState : CharacterState
 {
     private CharacterState nextState;
+    private IceBlock iceBlock = null;
 
     public PushLeftState(MainCharacter thisCharacter) : base(thisCharacter)
     {
@@ -704,6 +735,9 @@ public class PushLeftState : CharacterState
         thisCharacter.SetHorizFlip(true);
         SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
         SignalManager.Inst.AddListener<MonsterAttackedPlayerSignal>(onMonsterAttackedPlayer);
+        GameObject leftBlocker = thisCharacter.GetLeftBlocker();
+        if (leftBlocker != null && leftBlocker.tag == "IceBlock")
+            iceBlock = leftBlocker.GetComponent<IceBlock>();
     }
 
     public override CharacterState Update()
@@ -715,7 +749,11 @@ public class PushLeftState : CharacterState
         else if (!InputHandler.Inst.ButtonIsDown(MoveButton.LEFT))
             return new IdleState(thisCharacter);
         else if (thisCharacter.IsBlockedLeft)
+        {
+            if (iceBlock != null)
+                iceBlock.PushLeft();
             return this;
+        }
         else
             return new RunLeftState(thisCharacter);
     }
@@ -1899,6 +1937,7 @@ public class EnterJelloporterState : CharacterState {
 
     public override void Start()
     {
+        thisCharacter.FireAnimationTrigger("Jello");
         thisCharacter.transform.parent = jelloporter.transform;
         thisCharacter.StopMove();
         thisCharacter.StopJump();
@@ -1954,6 +1993,8 @@ public class RideJelloporterState : CharacterState
 public class ExitJelloporterState : CharacterState
 {
     public Jelloporter jelloporter;
+    private bool amStillJellod = true;
+
     public ExitJelloporterState(MainCharacter thisCharacter, Jelloporter jelloporter) : base(thisCharacter)
     {
         this.jelloporter = jelloporter;
@@ -1961,14 +2002,17 @@ public class ExitJelloporterState : CharacterState
 
     public override void Start()
     {
+        thisCharacter.FireAnimationTrigger("UnJello");
+        SignalManager.Inst.AddListener<PlayerFinishedUnjelloSignal>(onPlayerFinishedUnjello);
+
         thisCharacter.wayPoint = jelloporter.GetCurrentPlate();
         SignalManager.Inst.FireSignal(new PlayerExitingJelloporterSignal(jelloporter));
         thisCharacter.transform.SetParent(null);
         thisCharacter.SetKinematic(false);
-        Vector2 exitVelocity = new Vector2(-5f, 10f);
+        Vector2 exitVelocity = new Vector2(-2.5f, 5f);
         if (jelloporter.ExitRight)
         {
-            exitVelocity = new Vector2(5f, 10f);
+            exitVelocity = new Vector2(2.5f, 5f);
             thisCharacter.SetHorizFlip(false);
         }
         else
@@ -1988,7 +2032,7 @@ public class ExitJelloporterState : CharacterState
             else
                 return new IdleState(thisCharacter);
         }
-        else
+        else if (!amStillJellod)
         {
             if (thisCharacter.IsUpping())
                 thisCharacter.FireAnimationTrigger("JumpUp");
@@ -1996,8 +2040,20 @@ public class ExitJelloporterState : CharacterState
                 thisCharacter.FireAnimationTrigger("JumpTop");
             else if (thisCharacter.IsDowning())
                 thisCharacter.FireAnimationTrigger("JumpDown");
-            return this;
         }
+        return this;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.AddListener<PlayerFinishedUnjelloSignal>(onPlayerFinishedUnjello);
+    }
+
+    private void onPlayerFinishedUnjello(Signal signal)
+    {
+        PlayerFinishedUnjelloSignal playerFinishedUnjelloSignal = (PlayerFinishedUnjelloSignal)signal;
+        if (playerFinishedUnjelloSignal.player == thisCharacter)
+            amStillJellod = false;
     }
 }
 
@@ -2032,6 +2088,7 @@ public class RespawnState : CharacterState
 {
     JelloPlate spawnPlate;
     float HackyColliderDelay = .1f;
+    private bool amStillJellod = true;
 
     public RespawnState(MainCharacter thisCharacter) : base(thisCharacter)
     {
@@ -2040,13 +2097,16 @@ public class RespawnState : CharacterState
 
     public override void Start()
     {
+        thisCharacter.FireAnimationTrigger("UnJello");
+        SignalManager.Inst.AddListener<PlayerFinishedUnjelloSignal>(onPlayerFinishedUnjello);
+
         thisCharacter.transform.SetParent(null);
         thisCharacter.EnableMainCollider();
         thisCharacter.SetKinematic(false);
-        Vector2 exitVelocity = new Vector2(-5f, 10f);
+        Vector2 exitVelocity = new Vector2(-2.5f, 5f);
         if (spawnPlate.ExitRight)
         {
-            exitVelocity = new Vector2(5f, 10f);
+            exitVelocity = new Vector2(2.5f, 5f);
             thisCharacter.SetHorizFlip(false);
         }
         else
@@ -2074,7 +2134,7 @@ public class RespawnState : CharacterState
             }
             return new WaitToStart(thisCharacter);
         }
-        else
+        else if(!amStillJellod)
         {
             if (thisCharacter.IsUpping())
                 thisCharacter.FireAnimationTrigger("JumpUp");
@@ -2082,12 +2142,20 @@ public class RespawnState : CharacterState
                 thisCharacter.FireAnimationTrigger("JumpTop");
             else if (thisCharacter.IsDowning())
                 thisCharacter.FireAnimationTrigger("JumpDown");
-            return this;
         }
+        return this;
     }
 
     public override void End()
     {
+        SignalManager.Inst.AddListener<PlayerFinishedUnjelloSignal>(onPlayerFinishedUnjello);
         thisCharacter.EnableMainCollider();
+    }
+
+    private void onPlayerFinishedUnjello(Signal signal)
+    {
+        PlayerFinishedUnjelloSignal playerFinishedUnjelloSignal = (PlayerFinishedUnjelloSignal)signal;
+        if (playerFinishedUnjelloSignal.player == thisCharacter)
+            amStillJellod = false;
     }
 }
