@@ -53,14 +53,8 @@ public class StateEndingSignal : Signal {
         this.endingState = endingState;
     }
 }
-public class ButtonPressedSignal : Signal
-{
-    public ButtonType buttonType;
-    public ButtonPressedSignal(ButtonType buttonType)
-    {
-        this.buttonType = buttonType;
-    }
-}
+public class MenuClosedSignal : Signal {}
+public class InfoButtonPressed : Signal {}
 public class MoveButtonPressedSignal : Signal
 {
     public MoveButton moveButton { get; private set; }
@@ -153,3 +147,5 @@ public class ObstacleButtonChangedStateSignal : Signal
         this.obstacleButton = obstacleButton;
     }
 }
+public class CutSceneStartingSignal : Signal { }
+public class CutSceneFinishedSignal : Signal { }

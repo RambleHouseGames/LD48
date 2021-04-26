@@ -1994,6 +1994,7 @@ public class ExitJelloporterState : CharacterState
 {
     public Jelloporter jelloporter;
     private bool amStillJellod = true;
+    private bool cutSceneStarted = false;
 
     public ExitJelloporterState(MainCharacter thisCharacter, Jelloporter jelloporter) : base(thisCharacter)
     {
@@ -2004,6 +2005,7 @@ public class ExitJelloporterState : CharacterState
     {
         thisCharacter.FireAnimationTrigger("UnJello");
         SignalManager.Inst.AddListener<PlayerFinishedUnjelloSignal>(onPlayerFinishedUnjello);
+        SignalManager.Inst.AddListener<StateStartedSignal>(onStateStarted);
 
         thisCharacter.wayPoint = jelloporter.GetCurrentPlate();
         SignalManager.Inst.FireSignal(new PlayerExitingJelloporterSignal(jelloporter));
@@ -2024,6 +2026,8 @@ public class ExitJelloporterState : CharacterState
     {
         if (thisCharacter.IsGrounded)
         {
+            if (cutSceneStarted)
+                return new WaitToStart(thisCharacter);
             SignalManager.Inst.FireSignal(new JelloportationFinishedSignal());
             if (InputHandler.Inst.ButtonIsDown(MoveButton.RIGHT))
                 return new RunRightState(thisCharacter);
@@ -2047,6 +2051,7 @@ public class ExitJelloporterState : CharacterState
     public override void End()
     {
         SignalManager.Inst.AddListener<PlayerFinishedUnjelloSignal>(onPlayerFinishedUnjello);
+        SignalManager.Inst.RemoveListener<StateStartedSignal>(onStateStarted);
     }
 
     private void onPlayerFinishedUnjello(Signal signal)
@@ -2054,6 +2059,13 @@ public class ExitJelloporterState : CharacterState
         PlayerFinishedUnjelloSignal playerFinishedUnjelloSignal = (PlayerFinishedUnjelloSignal)signal;
         if (playerFinishedUnjelloSignal.player == thisCharacter)
             amStillJellod = false;
+    }
+
+    private void onStateStarted(Signal signal)
+    {
+        StateStartedSignal stateStartedSignal = (StateStartedSignal)signal;
+        if (stateStartedSignal.startedState.GetType() == typeof(WaitForCutSceneState))
+            cutSceneStarted = true;
     }
 }
 

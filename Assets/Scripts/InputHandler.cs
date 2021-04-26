@@ -24,7 +24,9 @@ public class InputHandler : MonoBehaviour
 
     private void Update()
     {
-        if(buttonsDown[MoveButton.LEFT] != (Input.GetKey(KeyCode.A) || Input.GetAxis("Horizontal") < -.2f || Input.GetAxis("DPad X") < -.2f))
+        bool downIsPressed = Input.GetKey(KeyCode.S) || Input.GetAxis("Vertical") < -.2f || Input.GetAxis("DPad Y") < -.2f;
+        bool upIsPressed = Input.GetKey(KeyCode.W) || Input.GetAxis("Vertical") > .2f || Input.GetAxis("DPad Y") > .2f;
+        if (buttonsDown[MoveButton.LEFT] != (Input.GetKey(KeyCode.A) || Input.GetAxis("Horizontal") < -.2f || Input.GetAxis("DPad X") < -.2f))
         {
             if (Input.GetKey(KeyCode.A) || Input.GetAxis("Horizontal") < -.2f || Input.GetAxis("DPad X") < -.2f)
             {
@@ -50,9 +52,9 @@ public class InputHandler : MonoBehaviour
                 buttonsDown[MoveButton.RIGHT] = false;
             }
         }
-        if (buttonsDown[MoveButton.JUMP] != Input.GetKey(KeyCode.W) || Input.GetAxis("Vertical") > .2f || Input.GetAxis("DPad Y") > .2f)
+        if (buttonsDown[MoveButton.JUMP] != upIsPressed)
         {
-            if (Input.GetKey(KeyCode.W) || Input.GetAxis("Vertical") > .2f || Input.GetAxis("DPad Y") > .2f)
+            if (upIsPressed)
             {
                 SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.JUMP));
                 buttonsDown[MoveButton.JUMP] = true;
@@ -61,6 +63,19 @@ public class InputHandler : MonoBehaviour
             {
                 SignalManager.Inst.FireSignal(new MoveButtonReleasedSignal(MoveButton.JUMP));
                 buttonsDown[MoveButton.JUMP] = false;
+            }
+        }
+        if (buttonsDown[MoveButton.DOWN] != downIsPressed)
+        {
+            if (downIsPressed)
+            {
+                SignalManager.Inst.FireSignal(new MoveButtonPressedSignal(MoveButton.DOWN));
+                buttonsDown[MoveButton.DOWN] = true;
+            }
+            else
+            {
+                SignalManager.Inst.FireSignal(new MoveButtonReleasedSignal(MoveButton.DOWN));
+                buttonsDown[MoveButton.DOWN] = false;
             }
         }
         if (buttonsDown[MoveButton.ATTACK] != (Input.GetKey(KeyCode.Space) || Input.GetKey("joystick button 0")))
@@ -98,4 +113,4 @@ public class InputHandler : MonoBehaviour
 
 }
 
-public enum MoveButton { LEFT, RIGHT, JUMP, ATTACK, SWITCH }
+public enum MoveButton { LEFT, RIGHT, JUMP, ATTACK, SWITCH, DOWN }

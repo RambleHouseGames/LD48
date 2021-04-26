@@ -52,7 +52,7 @@ public class StartMenuState : State
 
     public override void Start()
     {
-        SignalManager.Inst.AddListener<ButtonPressedSignal>(onButtonPressed);
+        SignalManager.Inst.AddListener<MenuClosedSignal>(onMenuClosed);
     }
 
     public override State Update()
@@ -62,22 +62,42 @@ public class StartMenuState : State
 
     public override void End()
     {
-        SignalManager.Inst.AddListener<ButtonPressedSignal>(onButtonPressed);
+        SignalManager.Inst.AddListener<MenuClosedSignal>(onMenuClosed);
     }
 
-    private void onButtonPressed(Signal signal)
+    private void onMenuClosed(Signal signal)
     {
-        ButtonPressedSignal buttonPressedSignal = (ButtonPressedSignal)signal;
-        if (buttonPressedSignal.buttonType == ButtonType.START)
-            nextState = new PlayState(Character.ICE_GIRL);
+        nextState = new IntroState();
     }
 }
 
 public class IntroState : State
 {
+    private State nextState;
+
+    public IntroState()
+    {
+        nextState = this;
+    }
+
     public override void Start()
     {
-        
+        SignalManager.Inst.AddListener<CutSceneFinishedSignal>(onCutSceneFinished);
+    }
+
+    public override State Update()
+    {
+        return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<CutSceneFinishedSignal>(onCutSceneFinished);
+    }
+
+    private void onCutSceneFinished(Signal signal)
+    {
+        nextState = new PlayState(Character.ICE_GIRL);
     }
 }
 
@@ -97,6 +117,7 @@ public class PlayState : State
     {
         SignalManager.Inst.AddListener<JelloportationStartedSignal>(onJelloportationStarted);
         SignalManager.Inst.AddListener<CharacterSwitchSignal>(onCharacterSwitched);
+        SignalManager.Inst.AddListener<CutSceneStartingSignal>(onCutSceneStarting);
     }
 
     public override State Update()
@@ -108,6 +129,7 @@ public class PlayState : State
     {
         SignalManager.Inst.RemoveListener<JelloportationStartedSignal>(onJelloportationStarted);
         SignalManager.Inst.RemoveListener<CharacterSwitchSignal>(onCharacterSwitched);
+        SignalManager.Inst.RemoveListener<CutSceneStartingSignal>(onCutSceneStarting);
     }
 
     private void onJelloportationStarted(Signal signal)
@@ -122,6 +144,44 @@ public class PlayState : State
             nextState = new PlayState(Character.BEEF_CAKE);
         else
             nextState = new PlayState(Character.ICE_GIRL);
+    }
+
+    private void onCutSceneStarting(Signal signal)
+    {
+        nextState = new WaitForCutSceneState(character);
+    }
+
+}
+
+public class WaitForCutSceneState : State
+{
+    private Character activeCharacter;
+    private State nextState;
+
+    public WaitForCutSceneState(Character activeCharacter)
+    {
+        this.activeCharacter = activeCharacter;
+        this.nextState = this;
+    }
+
+    public override void Start()
+    {
+        SignalManager.Inst.AddListener<CutSceneFinishedSignal>(onCutSceneFinished);
+    }
+
+    public override State Update()
+    {
+        return nextState;
+    }
+
+    public override void End()
+    {
+        SignalManager.Inst.RemoveListener<CutSceneFinishedSignal>(onCutSceneFinished);
+    }
+
+    private void onCutSceneFinished(Signal signal)
+    {
+        nextState = new PlayState(activeCharacter);
     }
 }
 
