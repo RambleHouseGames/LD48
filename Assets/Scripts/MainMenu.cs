@@ -11,7 +11,7 @@ public class MainMenu : MonoBehaviour
 
     private void onMenuClosed(Signal signal)
     {
-        gameObject.SetActive(false);
-        SignalManager.Inst.AddListener<MenuClosedSignal>(onMenuClosed);
+        SignalManager.Inst.RemoveListener<MenuClosedSignal>(onMenuClosed);
+        Destroy(gameObject);
     }
 }

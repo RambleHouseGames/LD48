@@ -18,7 +18,17 @@ public class StartButton : MonoBehaviour
 
     private void Start()
     {
-        SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+        SignalManager.Inst.AddListener<StateStartedSignal>(onStateStarted);
+    }
+
+    private void onStateStarted(Signal signal)
+    {
+        StateStartedSignal stateStartedSignal = (StateStartedSignal)signal;
+        if (stateStartedSignal.startedState.GetType() == typeof(StartMenuState))
+        {
+            SignalManager.Inst.RemoveListener<StateStartedSignal>(onStateStarted);
+            SignalManager.Inst.AddListener<MoveButtonPressedSignal>(onMoveButtonPressed);
+        }
     }
 
     private void onMoveButtonPressed(Signal signal)

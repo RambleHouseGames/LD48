@@ -9,6 +9,8 @@ public class GameStateManager : MonoBehaviour
     private State currentState = null;
     public State CurrentState { get { return currentState; } }
 
+    private float startDelay = 2f;
+
     private void Awake()
     {
         Inst = this;
@@ -16,6 +18,12 @@ public class GameStateManager : MonoBehaviour
 
     private void Update()
     {
+        if(startDelay > 0f)
+        {
+            startDelay -= Time.deltaTime;
+            return;
+        }
+
         if(currentState == null)
         {
             currentState = new StartMenuState();
